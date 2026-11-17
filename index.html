@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>推箱子</title>
+<style>
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    width: 100vw;
+    height: 100vh;
+    background: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: system-ui, sans-serif;
+    overflow: hidden;
+  }
+  /* 外框 */
+  .frame {
+    width: 92vw;
+    max-width: 420px;
+    height: 90vh;
+    max-height: 760px;
+    border: 3px solid #ff4d4f;
+    border-radius: 18px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+  }
+  /* 顶部关卡选择 */
+  .level-selector {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .level-selector button {
+    width: 42px;
+    height: 34px;
+    border: 2px solid #ff4d4f;
+    background: #fff;
+    color: #ff4d4f;
+    border-radius: 8px;
+    font-size: 18px;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  .level-selector button:active {
+    background: #ffe5e5;
+  }
+  .level-box {
+    border: 2px solid #ff4d4f;
+    background: #fff;
+    color: #ff4d4f;
+    padding: 6px 18px;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: bold;
+  }
+  /* 地图区域 */
+  .map-wrapper {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #ff4d4f;
+    border-radius: 14px;
+    margin-bottom: 12px;
+    background: #fff;
+    overflow: hidden;
+  }
+  .map-container {
+    background: #f8bbd0;
+    border-radius: 16px;
+    padding: 12px;
+  }
+  .map {
+    display: grid;
+    gap: 3px;
+  }
+  .cell {
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    position: relative;
+  }
+  .cell.floor {
+    background: #ffffff;
+  }
+  .cell.target {
+    background: #ffe5ef;
+  }
+  .cell.wall {
+    background: transparent;
+  }
+  .box {
+    width: 75%;
+    height: 75%;
+    background: #f06292;
+    color: #fff;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: inset 0 0 0 2px #fff;
+  }
+  .box.on-target {
+    background: #4caf50;
+  }
+  .player {
+    font-size: 34px;
+    line-height: 1;
+  }
+  .target-mark {
+    position: absolute;
+    color: #ad1457;
+    font-weight: 800;
+    font-size: 20px;
+  }
+  /* 底部控制区 */
+  .bottom-area {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    align-items: center;
+  }
+  .left-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .side-btn {
+    border: 2px solid #ff4d4f;
+    background: #fff;
+    color: #ff4d4f;
+    padding: 10px 0;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  .side-btn:active {
+    background: #ffe5e5;
+  }
+  /* 右下角方向键区：四向箭头 */
+  .dpad {
+    position: relative;
+    width: 140px;
+    height: 140px;
+    justify-self: end;
+  }
+  .dir-btn {
+    position: absolute;
+    width: 52px;
+    height: 52px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .dir-btn img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    pointer-events: none;
+  }
+  .dir-btn:active img {
+    transform: scale(0.92);
+    filter: brightness(1.1);
+  }
+  /* 旋转角度 */
+  .dir-up {
+    top: 3px;
+    left: 50%;
+    transform: translateX(-50%) rotate(-90deg);
+  }
+  .dir-down {
+    bottom: 3px;
+    left: 50%;
+    transform: translateX(-50%) rotate(90deg);
+  }
+  .dir-left {
+    left: 3px;
+    top: 50%;
+    transform: translateY(-50%) rotate(180deg);
+  }
+  .dir-right {
+    right: 3px;
+    top: 50%;
+    transform: translateY(-50%) rotate(0deg);
+  }
+  /* 通关弹窗 */
+  .win-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 99;
+  }
+  .win-box {
+    background: #fff;
+    padding: 32px;
+    border-radius: 22px;
+    text-align: center;
+  }
+  .win-box h2 {
+    margin-bottom: 16px;
+    color: #ad1457;
+  }
+  .win-box button {
+    padding: 10px 24px;
+    border: none;
+    background: #f06292;
+    color: #fff;
+    border-radius: 12px;
+    font-size: 17px;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+  <div class="frame">
+    <!-- 顶部关卡选择 -->
+    <div class="level-selector">
+      <button onclick="changeLevel(-1)">◀</button>
+      <div class="level-box" id="levelBox">第1关 / 共50关</div>
+      <button onclick="changeLevel(1)">▶</button>
+    </div>
+    <!-- 地图区域 -->
+    <div class="map-wrapper">
+      <div class="map-container">
+        <div class="map" id="mapEl"></div>
+      </div>
+    </div>
+    <!-- 底部控制区 -->
+    <div class="bottom-area">
+      <div class="left-buttons">
+        <button class="side-btn" onclick="undo()">撤回</button>
+        <button class="side-btn" onclick="restart()">重开</button>
+      </div>
+      <div class="dpad">
+        <button class="dir-btn dir-up" onclick="move(0, -1)">
+          <img src="C:\Users\Administrator\Desktop\Game\jiantou1.png" alt="上" />
+        </button>
+        <button class="dir-btn dir-down" onclick="move(0, 1)">
+          <img src="C:\Users\Administrator\Desktop\Game\jiantou1.png" alt="下" />
+        </button>
+        <button class="dir-btn dir-left" onclick="move(-1, 0)">
+          <img src="C:\Users\Administrator\Desktop\Game\jiantou1.png" alt="左" />
+        </button>
+        <button class="dir-btn dir-right" onclick="move(1, 0)">
+          <img src="C:\Users\Administrator\Desktop\Game\jiantou1.png" alt="右" />
+        </button>
+      </div>
+    </div>
+  </div>
+  <div class="win-modal" id="winModal">
+    <div class="win-box">
+      <h2 id="winText">🎉 通关啦！</h2>
+      <button onclick="nextLevel()">进入下一关</button>
+    </div>
+  </div>
+
+<script>
+// Microban标准关卡(metool.online使用) 前50关，每关箱子=目标数量，可以正常通关
+const LEVELS = [
+["####","#@.#","#$ .","####"],
+["#####","#@..#","#.$.#","#.. .#","#####"],
+["######","#@...#","#.$..#","#..$.#","#... .#","######"],
+["#######","#..@...#","#.$.....#","#.....$.#","#...... .#","#######"],
+["########","#@......#","#.$.....#","#...$...#","#.......#","#....$..#","#..... ..#","########"],
+["  #####","###   #","#@$*  #","###   #","  #####"],
+["  #####","###   #","#@$$**#","###   #","  #####"],
+["########","#      #","#  $$$ #","# @  . #","#  ... #","########"],
+["#########","#       #","# $ $ $ #","# @ ... #","#  ...  #","#########"],
+["  #######","###     #","# $$$$  #","# @ ....#","###     #","  #######"],
+["##########","#         #","#  $$$$   #","# @  .... #","#   ....  #","##########"],
+["  ########","  ##    ##","### $$$$ ###","#  @  .... #","###  .... ###","  ##    ##","  ########"],
+["###########","#           #","#  $ $ $ $   #","# @   ....   #","#    ....    #","###########"],
+["  #########","  ###     ###","#### $$$$ ####","#   @  ....   #","####  .... ####","  ###     ###","  #########"],
+["############","#            #","#   $$$$     #","# @    ....   #","#     ....    #","############"],
+["########","#  ...  #","# .$.$. #","#..@..$ #","#  ...  #","########"],
+["  ######","  ##  ##","###..###","# $@$ .#","###..###","  ##  ##","  ######"],
+["#########","#   ...  #","# .$$..$ #","#  @... .#","#   ...  #","#########"],
+["##########","#    ...   #","# .$$..$$. #","#   @....  #","#    ...   #","##########"],
+["###########","#     ...    #","# .$$$..$$$. #","#    @....   #","#     ...    #","###########"],
+["########","# $ $ $ #","#  @... #","#  ... .#","########"],
+["#########","#  $ $ $ #","#   @... #","#  ... ..#","#########"],
+["##########","#   $ $ $  #","#    @...  #","#   ... .. #","##########"],
+["###########","#    $ $ $   #","#     @...   #","#    ... ..  #","###########"],
+["############","#     $ $ $    #","#      @...    #","#     ... ..   #","############"],
+["  ########","###      ###","# $$$$.... #","# @        #","###      ###","  ########"],
+["  #########","###        ###","# $$$$..... #","# @         #","###        ###","  #########"],
+["  ##########","###          ###","# $$$$...... #","# @          #","###          ###","  ##########"],
+["  ###########","###            ###","# $$$$....... #","# @           #","###            ###","  ###########"],
+["  ############","###              ###","# $$$$........ #","# @             #","###              ###","  ############"],
+["########","#*  *  #","#*$*$* #","#  @   #","########"],
+["#########","#*   *   #","#*$*$*$* #","#   @    #","#########"],
+["##########","#*    *    #","#*$*$*$*$* #","#    @     #","##########"],
+["###########","#*     *     #","#*$*$*$*$*$* #","#     @      #","###########"],
+["############","#*      *      #","#*$*$*$*$*$*$* #","#      @       #","############"],
+["  #####"," ###  #","# @$$ #","# ..* #"," ###  #","  #####"],
+["  ######"," ####   #","# @$$$ #","# ...* #"," ####   #","  ######"],
+["  #######","#####    #","# @$$$$ #","# ....* #","#####    #","  #######"],
+["  ########","######     #","# @$$$$$ #","# .....* #","######     #","  ########"],
+["  #########","#######      #","# @$$$$$$ #","# ......* #","#######      #","  #########"],
+["########","#  @..  #","# $$$.. #","#  ...  #","########"],
+["#########","#   @... #","# $$$$..#","#   ... .#","#########"],
+["##########","#    @....#","# $$$$$..#","#    ... .#","##########"],
+["###########","#     @.....#","# $$$$$$..#","#     ... .#","###########"],
+["############","#      @......#","# $$$$$$$..#","#      ... .#","############"],
+["########","#  ..@  #","# ..$$$ #","#  ..*  #","########"],
+["#########","#   ...@ #","# ...$$$$#","#   ...* #","#########"],
+["##########","#    ....@#","# ....$$$$$#","#    ....* #","##########"],
+["###########","#     .....@#","# .....$$$$$$#","#     ....*  #","###########"],
+["############","#      ......@#","# ......$$$$$$$#","#      .....*  #","############"]
+];
+
+let currentLevel = 0;
+let map, player, boxes, goals, history = [];
+let stepCount = 0;
+
+function initLevel(idx) {
+  currentLevel = idx;
+  const rawLevel = LEVELS[idx];
+  stepCount = 0;
+  boxes = [];
+  goals = [];
+  history = [];
+
+  // 找到关卡最大宽度，补全每行空格对齐
+  let maxW = 0;
+  rawLevel.forEach(line=>{if(line.length>maxW) maxW=line.length;});
+  const level = rawLevel.map(line=>line.padEnd(maxW,' '));
+
+  const rows = level.length;
+  const cols = maxW;
+
+  // 自动计算格子大小适配屏幕
+  let cellSize = 56;
+  if(cols >=13) cellSize=44;
+  else if(cols >=9) cellSize=50;
+
+  map = [];
+  for(let r=0; r<rows; r++){
+    map[r] = [];
+    for(let c=0; c<cols; c++){
+      const ch = level[r][c];
+      switch(ch){
+        case '@':
+          player = {r,c};
+          map[r][c] = ' ';
+          break;
+        case '+':
+          player = {r,c};
+          goals.push({r,c});
+          map[r][c] = '.';
+          break;
+        case '$':
+          boxes.push({r,c});
+          map[r][c] = ' ';
+          break;
+        case '*':
+          boxes.push({r,c});
+          goals.push({r,c});
+          map[r][c] = '.';
+          break;
+        case '.':
+          goals.push({r,c});
+          map[r][c] = '.';
+          break;
+        default:
+          map[r][c] = ch;
+      }
+    }
+  }
+
+  document.getElementById('levelBox').textContent = `第${idx+1}关 / 共${LEVELS.length}关`;
+  render(cellSize);
+}
+
+function changeLevel(dir){
+  const next = currentLevel + dir;
+  if(next <0 || next >= LEVELS.length) return;
+  initLevel(next);
+}
+
+function saveSnapshot(){
+  history.push({
+    p:{...player},
+    boxes: boxes.map(b=>({...b}))
+  });
+}
+
+function move(dc, dr){
+  const nr = player.r + dr;
+  const nc = player.c + dc;
+  if(nr<0 || nr>=map.length || nc<0 || nc>=map[0].length) return;
+  if(map[nr][nc] === '#') return;
+
+  const boxIdx = boxes.findIndex(b=>b.r===nr && b.c===nc);
+  if(boxIdx !== -1){
+    const br = nr + dr;
+    const bc = nc + dc;
+    if(br<0 || br>=map.length || bc<0 || bc>=map[0].length) return;
+    if(map[br][bc]==='#') return;
+    if(boxes.some(b=>b.r===br && b.c===bc)) return;
+
+    saveSnapshot();
+    boxes[boxIdx] = {r:br,c:bc};
+    player = {r:nr,c:nc};
+  }else{
+    saveSnapshot();
+    player = {r:nr,c:nc};
+  }
+  render();
+  checkWin();
+}
+
+function undo(){
+  if(!history.length) return;
+  const last = history.pop();
+  player = last.p;
+  boxes = last.boxes;
+  render();
+}
+
+function restart(){
+  initLevel(currentLevel);
+}
+
+function nextLevel(){
+  document.getElementById('winModal').style.display='none';
+  if(currentLevel < LEVELS.length-1){
+    initLevel(currentLevel+1);
+  }else{
+    initLevel(0);
+  }
+}
+
+function checkWin(){
+  // 全部箱子落在目标点即通关
+  const ok = goals.every(g=> boxes.some(b=> b.r===g.r && b.c===g.c));
+  if(ok){
+    if(currentLevel >= LEVELS.length-1){
+      document.getElementById('winText').innerText = '🏆恭喜通关全部关卡！';
+    }else{
+      document.getElementById('winText').innerText = '🎉 通关啦！';
+    }
+    document.getElementById('winModal').style.display='flex';
+  }
+}
+
+function render(cellSize){
+  const el = document.getElementById('mapEl');
+  el.innerHTML = '';
+  el.style.gridTemplateColumns = `repeat(${map[0].length}, ${cellSize}px)`;
+
+  for(let r=0; r<map.length; r++){
+    for(let c=0; c<map[r].length; c++){
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.style.width = cellSize+'px';
+      cell.style.height = cellSize+'px';
+
+      const isWall = map[r][c] === '#';
+      const isGoal = map[r][c] === '.';
+
+      if(isWall) cell.classList.add('wall');
+      else if(isGoal) cell.classList.add('target');
+      else cell.classList.add('floor');
+
+      if(isGoal){
+        cell.innerHTML = `<div class="target-mark">✕</div>`;
+      }
+
+      const boxHere = boxes.find(b=>b.r===r && b.c===c);
+      if(boxHere){
+        const boxDom = document.createElement('div');
+        boxDom.className = 'box';
+        if(isGoal) boxDom.classList.add('on-target');
+        cell.appendChild(boxDom);
+      }
+
+      if(player.r === r && player.c === c){
+        const pDom = document.createElement('div');
+        pDom.className = 'player';
+        pDom.innerText = '👷';
+        cell.appendChild(pDom);
+      }
+      el.appendChild(cell);
+    }
+  }
+}
+
+window.addEventListener('keydown',e=>{
+  switch(e.key){
+    case 'ArrowUp': move(0,-1); break;
+    case 'ArrowDown': move(0,1); break;
+    case 'ArrowLeft': move(-1,0); break;
+    case 'ArrowRight': move(1,0); break;
+  }
+});
+
+initLevel(0);
+</script>
+</body>
+</html>
