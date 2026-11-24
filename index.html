@@ -1,977 +1,422 @@
 <!DOCTYPE html>
+<!-- ============================================================
+  双人对战记分牌（手机竖屏适配版）
+  布局完全参照原稿线框：
+    1. 顶部：标题「记分牌」+ 「下一局」按钮（结束本局，开始下一局）
+    2. 总比分（双方胜场数：本局得分高者 +1）
+    3. 双方名字输入框 + 中间互换按钮
+    4. 当前局数（如：第七局）
+    5. 当前比分（两个大比分框 + 中间冒号）
+    6. 双方各自的加分系统按钮（+1 ~ +9、+X 自定义加分、-X 自定义减分）
+    7. 历史记录：之前每一局的比分，左右两列展示
+  后期修改提示：
+    - 颜色 / 尺寸集中在下方 CSS「可修改配置区」
+    - 默认名字、按钮分值在 JS「初始状态」里改
+    - 所有按钮分值都可以直接在 HTML 按钮的 data-score 属性上调整
+  ============================================================ -->
 <html lang="zh-CN">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>Firefly Starlight - 萤火虫星空漫游</title>
-<style>
-  html,body{margin:0;padding:0;height:100%;height:100dvh;overflow:hidden;background:#05080f;font-family:Consolas,Menlo,monospace;color:#e8f0ff;
-    touch-action:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;overscroll-behavior:none;}
-  #gameCanvas{position:absolute;inset:0;display:block;}
-  #radarCanvas{position:absolute;right:30px;top:120px;}
-  .panel{position:absolute;background:rgba(6,11,20,.62);border:1px solid rgba(120,160,220,.15);border-radius:8px;padding:12px 14px;}
-  #controls{left:18px;top:18px;width:280px;font-size:13px;line-height:1.9;}
-  #controls h3,#info h3{margin:0 0 8px;font-size:14px;color:#ffd966;letter-spacing:1px;}
-  #info{left:18px;top:auto;bottom:18px;width:280px;font-size:13px;}
-  #topbar{left:50%;transform:translateX(-50%);top:16px;width:380px;text-align:center;}
-  #topbar .level{font-size:24px;color:#ffe680;letter-spacing:2px;}
-  #topbar .collect{font-size:15px;color:#dfe9ff;margin-top:6px;}
-  #topbar .bar{height:8px;background:#1a2433;border-radius:4px;margin:8px 24px;overflow:hidden;}
-  #topbar .bar>div{height:100%;background:#ffd147;border-radius:4px;}
-  #topbar .time{font-size:18px;margin-top:4px;}
-  .key{display:inline-block;min-width:62px;color:#f2cf6a;}
-  .dim{color:#93a6bd;}
-  #overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(3,6,12,.92);z-index:20;}
-  #overlay h1{font-size:46px;color:#ffe680;letter-spacing:4px;margin:0 0 10px;}
-  #overlay p{color:#9fc2e8;margin:6px 0;}
-  #nameInput{background:#0a1320;border:1px solid #ffd147;color:#fff;font-size:24px;padding:10px 14px;width:320px;text-align:center;border-radius:6px;outline:none;font-family:inherit;touch-action:auto;}
-  #startBtn{margin-top:22px;background:#ffd147;color:#1a1200;border:none;font-size:20px;padding:10px 34px;border-radius:6px;cursor:pointer;font-family:inherit;letter-spacing:1px;touch-action:auto;}
-  #startBtn:hover{background:#ffe07a;}
-  #banner{position:absolute;left:50%;top:42%;transform:translate(-50%,-50%);text-align:center;z-index:10;pointer-events:none;display:none;}
-  #banner .big{font-size:52px;color:#ffe680;letter-spacing:3px;text-shadow:0 2px 10px rgba(0,0,0,.6);}
-  #banner .sub{font-size:22px;color:#bcd8ff;margin-top:12px;}
-  #radarLabel{position:absolute;right:150px;top:420px;width:300px;text-align:center;font-size:13px;color:#93a6bd;line-height:1.8;}
-  .hint{position:absolute;bottom:18px;right:30px;font-size:12px;color:#6b7d92;}
+  <meta charset="UTF-8">
+  <!-- 手机视口设置：禁止用户缩放，宽度跟随设备 -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>记分牌</title>
+  <style>
+    /* ========== 可修改配置区：颜色 / 基础尺寸，改这里即可整体换肤 ========== */
+    :root {
+      --bg-color: #000;            /* 页面背景色（原稿为黑色） */
+      --line-color: #fff;          /* 线条 / 边框颜色（原稿为白色） */
+      --text-color: #fff;          /* 文字颜色 */
+      --title-color: #ff9ec7;      /* 标题「记分牌」颜色（粉色） */
+      --btn-bg: transparent;       /* 按钮背景色 */
+      --btn-active-bg: #ffffff1a;   /* 按钮按下/悬停时的浅色背景 */
+      --main-font: 16px;            /* 正文字号基准 */
+      --score-font: 76px;          /* 当前比分大字字号 */
+      --total-font: 34px;          /* 总比分字号 */
+      --gap: 10px;                 /* 模块之间的间距 */
+      --radius: 8px;               /* 控件圆角 */
+    }
 
-  /* ===== 触屏控件（仅触屏设备显示） ===== */
-  #joyZone{position:absolute;left:24px;bottom:34px;width:130px;height:130px;border-radius:50%;
-    background:rgba(20,32,50,.35);border:1px solid rgba(140,180,230,.25);display:none;z-index:15;touch-action:none;}
-  #stick{position:absolute;left:50%;top:50%;width:56px;height:56px;border-radius:50%;
-    background:rgba(255,209,71,.55);transform:translate(-50%,-50%);pointer-events:none;}
-  .tbtn{position:absolute;right:24px;width:72px;height:72px;border-radius:50%;display:none;z-index:15;
-    background:rgba(20,32,50,.45);border:1px solid rgba(140,180,230,.3);color:#ffe680;font-size:30px;
-    align-items:center;justify-content:center;touch-action:none;}
-  #btnUp{bottom:120px;}
-  #btnDown{bottom:34px;}
-  body.touch #joyZone,body.touch .tbtn{display:flex;}
-  body.touch #controls{display:none;}
+    /* ========== 全局重置 ========== */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent; /* 去掉手机点击按钮的蓝色高亮 */
+    }
 
-  /* ===== 小屏（手机 / 竖屏）响应式 ===== */
-  @media (max-width: 768px){
-    #topbar{width:62%;top:10px;padding:8px 10px;}
-    #topbar .level{font-size:16px;}
-    #topbar .collect{font-size:12px;margin-top:3px;}
-    #topbar .bar{margin:5px 12px;}
-    #topbar .time{font-size:14px;}
-    #info{left:10px;top:74px;bottom:auto;width:150px;padding:8px 10px;font-size:11px;}
-    #controls{display:none;}
-    #radarCanvas{right:10px;top:74px;width:140px;height:140px;}
-    #radarLabel{display:none;}
-    #overlay h1{font-size:30px;letter-spacing:2px;}
-    #overlay p{font-size:14px;padding:0 16px;text-align:center;}
-    #nameInput{width:70%;font-size:18px;}
-    #banner .big{font-size:34px;}
-    #banner .sub{font-size:15px;}
-    #joyZone{left:18px;bottom:26px;width:116px;height:116px;}
-    #stick{width:50px;height:50px;}
-    .tbtn{right:18px;width:62px;height:62px;font-size:26px;}
-    #btnUp{bottom:104px;}
-    #btnDown{bottom:26px;}
-  }
-</style>
+    body {
+      background: var(--bg-color);
+      color: var(--text-color);
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+      font-size: var(--main-font);
+      min-height: 100vh;
+      /* 页面整体留白，避免贴到手机屏幕边缘 */
+      padding: calc(var(--gap) * 1.2);
+      max-width: 480px;             /* 手机端最大宽度，平板/桌面居中显示 */
+      margin: 0 auto;
+    }
+
+    /* ========== 1. 顶部标题栏：标题 + 「下一局」按钮 ========== */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border: 1px solid var(--line-color);
+      border-radius: var(--radius);
+      padding: var(--gap);
+      margin-bottom: var(--gap);
+    }
+    .header .title {
+      font-size: 24px;
+      letter-spacing: 2px;
+      color: var(--title-color);  /* 标题粉色，颜色在配置区 --title-color 改 */
+    }
+    /* 「下一局」键：这局结束，开始下一局 */
+    .ok-btn {
+      background: var(--btn-bg);
+      color: var(--title-color);
+      border: 1px solid var(--line-color);
+      border-radius: var(--radius);
+      padding: 10px 18px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    .ok-btn:active { background: var(--btn-active-bg); }
+
+    /* ========== 2. 总比分区（双方胜场数，格式 03:01） ========== */
+    .total-score {
+      text-align: center;
+      font-size: var(--total-font);
+      letter-spacing: 4px;
+      padding: var(--gap) 0;
+      border-bottom: 1px solid var(--line-color);
+      margin-bottom: var(--gap);
+    }
+
+    /* ========== 3. 名字输入行：左输入框 ⇄ 互换 右输入框 ========== */
+    .name-row {
+      display: flex;
+      align-items: center;
+      gap: var(--gap);
+      margin-bottom: var(--gap);
+    }
+    .name-input {
+      flex: 1;
+      background: var(--btn-bg);
+      border: 1px solid var(--line-color);
+      border-radius: var(--radius);
+      color: var(--text-color);
+      font-size: 18px;
+      text-align: center;
+      padding: 10px 6px;
+      min-width: 0;               /* 允许输入框收缩，防止溢出 */
+    }
+    .name-input::placeholder { color: #888; }
+    /* 中间名字互换按钮 */
+    .swap-btn {
+      background: var(--btn-bg);
+      border: 1px solid var(--line-color);
+      border-radius: var(--radius);
+      color: var(--text-color);
+      font-size: 18px;
+      padding: 8px 12px;
+      cursor: pointer;
+    }
+    .swap-btn:active { background: var(--btn-active-bg); }
+
+    /* ========== 4. 当前局数标签 ========== */
+    .round-label {
+      text-align: center;
+      font-size: 15px;
+      margin-bottom: 6px;
+    }
+
+    /* ========== 5. 当前比分区：左大框 : 右大框 ========== */
+    .current-score {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--gap);
+      margin-bottom: var(--gap);
+    }
+    .score-box {
+      flex: 1;
+      border: 1px solid var(--line-color);
+      border-radius: var(--radius);
+      text-align: center;
+      font-size: var(--score-font);
+      padding: 12px 0;
+      min-height: 110px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .score-colon {
+      font-size: var(--score-font);
+      padding: 0 2px;
+    }
+
+    /* ========== 6. 加分系统：左右两列按钮组 ========== */
+    .controls-row {
+      display: flex;
+      gap: var(--gap);
+      margin-bottom: var(--gap);
+    }
+    .control-col {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    /* 按钮网格：每行 4 个（+1 +2 +3 +4 / +5 +6 +7 +8 / +9 +X -X） */
+    .btn-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+    .score-btn {
+      background: var(--btn-bg);
+      border: 1px solid var(--line-color);
+      border-radius: var(--radius);
+      color: var(--text-color);
+      font-size: 16px;
+      padding: 12px 0;
+      cursor: pointer;
+    }
+    .score-btn:active { background: var(--btn-active-bg); }
+    /* 减分按钮单独标色（需要时可改） */
+    .score-btn.minus { color: #ff6b6b; }
+
+    /* ========== 7. 历史记录区：左右两列展示每一局比分 ========== */
+    .history {
+      border: 1px solid var(--line-color);
+      border-radius: var(--radius);
+      padding: var(--gap);
+    }
+    .history-title {
+      font-size: 14px;
+      margin-bottom: 8px;
+      opacity: 0.8;
+      color: #1a01fc;
+      font-weight: 800;
+    }
+    .history-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;  /* 左右两列 */
+      gap: 6px var(--gap);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .history-item { white-space: nowrap; }
+    .history-empty { opacity: 0.5; }
+  </style>
 </head>
 <body>
-<canvas id="gameCanvas"></canvas>
 
-<div id="topbar" class="panel">
-  <div class="level" id="uiLevel">LEVEL 01 / 50</div>
-  <div class="collect" id="uiCollect">COLLECTED 0 / 0</div>
-  <div class="bar"><div id="uiBar" style="width:0%"></div></div>
-  <div class="time" id="uiTime">TIME 0:00</div>
-</div>
+  <!-- ===== 1. 顶部：标题 + 「下一局」按钮（结束本局，开始下一局） ===== -->
+  <header class="header">
+    <div class="title">记分牌</div>
+    <!-- 下一局键：点击后把当前比分记入历史，清空当前比分，局数 +1 -->
+    <button class="ok-btn" id="okBtn">下一局</button>
+  </header>
 
-<div id="controls" class="panel">
-  <h3>CONTROLS</h3>
-  <div><span class="key">W / ↑</span> 加速前进</div>
-  <div><span class="key">S / ↓</span> 刹车 / 倒退</div>
-  <div><span class="key">A / ←</span> 左转</div>
-  <div><span class="key">D / →</span> 右转</div>
-  <div><span class="key">SPACE</span> 上升</div>
-  <div><span class="key">SHIFT</span> 下降</div>
-  <div><span class="key">MOUSE</span> 移动鼠标环视</div>
-  <div><span class="key">R</span> 重开本关</div>
-  <div><span class="key">ESC</span> 返回主界面</div>
-</div>
+  <!-- ===== 2. 总比分：双方胜场数（格式 03:01） ===== -->
+  <div class="total-score" id="totalScore">00:00</div>
 
-<div id="info" class="panel">
-  <h3>PLAYER</h3>
-  <div id="uiPlayer">PLAYER: -</div>
-  <div id="uiGold">TOTAL GOLD: 0</div>
-</div>
+  <!-- ===== 3. 名字输入：可直接输入，中间按钮互换双方名字 ===== -->
+  <div class="name-row">
+    <input class="name-input" id="nameLeft" type="text" placeholder="名字" maxlength="10">
+    <button class="swap-btn" id="swapBtn" title="互换名字">⇄</button>
+    <input class="name-input" id="nameRight" type="text" placeholder="名字" maxlength="10">
+  </div>
 
-<canvas id="radarCanvas" width="236" height="236"></canvas>
-<div id="radarLabel">
-  <div>雷达：亮金=在上方，橙=在下方</div>
-  <div>数字 = 高度差 (m)</div>
-  <div style="color:#f0735f;">红色岩石 = 陨石，避开！</div>
-</div>
+  <!-- ===== 4. 当前局数（如：第七局） ===== -->
+  <div class="round-label" id="roundLabel">第一局</div>
 
-<div id="banner">
-  <div class="big" id="bannerBig"></div>
-  <div class="sub" id="bannerSub"></div>
-</div>
+  <!-- ===== 5. 当前比分：左右两个大比分框 ===== -->
+  <section class="current-score">
+    <div class="score-box" id="scoreLeft">0</div>
+    <div class="score-colon">:</div>
+    <div class="score-box" id="scoreRight">0</div>
+  </section>
 
-<div id="joyZone"><div id="stick"></div></div>
-<div class="tbtn" id="btnUp">▲</div>
-<div class="tbtn" id="btnDown">▼</div>
+  <!-- ===== 6. 加分系统：左侧 / 右侧各自的加减分按钮 ===== -->
+  <section class="controls-row">
+    <!-- 左方按钮组：data-score 为对应分值，需要改分值直接改这里 -->
+    <div class="control-col">
+      <div class="btn-grid">
+        <button class="score-btn" data-side="left" data-score="1">+1</button>
+        <button class="score-btn" data-side="left" data-score="2">+2</button>
+        <button class="score-btn" data-side="left" data-score="3">+3</button>
+        <button class="score-btn" data-side="left" data-score="4">+4</button>
+        <button class="score-btn" data-side="left" data-score="5">+5</button>
+        <button class="score-btn" data-side="left" data-score="6">+6</button>
+        <button class="score-btn" data-side="left" data-score="7">+7</button>
+        <button class="score-btn" data-side="left" data-score="8">+8</button>
+        <button class="score-btn" data-side="left" data-score="9">+9</button>
+        <!-- +X：自定义分值，点击后弹窗输入数字 -->
+        <button class="score-btn" data-side="left" data-score="x">+x</button>
+        <!-- -X：自定义减分，点击后弹窗输入要减的分值 -->
+        <button class="score-btn minus" data-side="left" data-score="-x">-x</button>
+      </div>
+    </div>
+    <!-- 右方按钮组 -->
+    <div class="control-col">
+      <div class="btn-grid">
+        <button class="score-btn" data-side="right" data-score="1">+1</button>
+        <button class="score-btn" data-side="right" data-score="2">+2</button>
+        <button class="score-btn" data-side="right" data-score="3">+3</button>
+        <button class="score-btn" data-side="right" data-score="4">+4</button>
+        <button class="score-btn" data-side="right" data-score="5">+5</button>
+        <button class="score-btn" data-side="right" data-score="6">+6</button>
+        <button class="score-btn" data-side="right" data-score="7">+7</button>
+        <button class="score-btn" data-side="right" data-score="8">+8</button>
+        <button class="score-btn" data-side="right" data-score="9">+9</button>
+        <button class="score-btn" data-side="right" data-score="x">+x</button>
+        <button class="score-btn minus" data-side="right" data-score="-x">-x</button>
+      </div>
+    </div>
+  </section>
 
-<div id="overlay">
-  <h1>FIREFLY STARLIGHT</h1>
-  <p>50 关金色粒子收集漫游 · 避开陨石</p>
-  <p style="margin-top:24px;">输入你的名字（字母 / 数字，最多 16 位）</p>
-  <input id="nameInput" type="text" maxlength="16" autocomplete="off">
-  <button id="startBtn">ENTER 开始</button>
-  <p class="dim" style="margin-top:20px;">ESC 退出 · 进度自动保存在浏览器本地</p>
-</div>
+  <!-- ===== 7. 历史记录：之前每一局的比分 ===== -->
+  <section class="history">
+    <div class="history-title">历史记录</div>
+    <div class="history-grid" id="historyGrid"></div>
+  </section>
 
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
-<script>
-"use strict";
+  <script>
+    /* ============================================================
+       JS 初始状态：默认名字、分值规则都在这里改
+       ============================================================ */
+    const state = {
+      // 双方：name 名字，score 当前局比分，total 胜场数（赢一局 +1）
+      players: [
+        { name: '玩家A', score: 0, total: 0 },
+        { name: '玩家B', score: 0, total: 0 }
+      ],
+      round: 1,                 // 当前局数，从第 1 局开始
+      history: []               // 历史记录：{ round, s1, s2 }
+    };
 
-/* ============ 常量 / 配置 ============ */
-const MAX_LEVEL = 50;
-const SAVE_KEY = "firefly_progress_v1";
-
-const MAX_SPEED = 20.0;
-const REVERSE_SPEED = 8.0;
-const SPEED_RESPONSE = 4.5;
-const TURN_RATE = 95.0;
-const TURN_RESPONSE = 12.0;
-const MOUSE_SENS = 0.14;
-const VERT_SPEED = 13.0;
-const VERT_RESPONSE = 6.0;
-const COLLIDE_DIST = 1.9;
-const CAM_DIST = 8.5;
-const CAM_HEIGHT = 3.2;
-const CAM_RESPONSE = 14.0;
-const INTRO_DURATION = 2.2;
-const MAX_METEOR = 28;
-
-function levelConfig(L){
-  const n = 3 + Math.floor((L - 1) * 25 / (MAX_LEVEL - 1));
-  const radius = 10.0 + (L - 1) * 0.55;
-  const timeLimit = 55.0 + 4.3 * n;
-  const drift = L <= 8 ? 0.0 : Math.min(2.6, (L - 8) * 0.065);
-  const size = 0.55 - 0.20 * (L - 1) / (MAX_LEVEL - 1);
-  return { n, radius, timeLimit, drift, size };
-}
-
-/* ============ 存档（替代 txt 文件，存 localStorage） ============ */
-function loadSave(){
-  try{
-    const raw = localStorage.getItem(SAVE_KEY);
-    if(raw) return JSON.parse(raw);
-  }catch(e){}
-  return null;
-}
-function writeSave(obj){
-  try{ localStorage.setItem(SAVE_KEY, JSON.stringify(obj)); }catch(e){}
-}
-
-/* ============ 全局状态 ============ */
-const game = {
-  mode: "input",        // input | playing
-  playerName: "",
-  totalGold: 0,
-  totalTime: 0.0,
-  savedLevel: 1,
-};
-
-let level = 1;
-let state = "playing";           // playing | cleared | failed | victory
-let stateTimer = 0.0;
-let introTimer = 0.0;
-let failReason = "";
-
-let nTargets = 0;
-let levelRadius = 10.0;
-let timeLimit = 60.0;
-let timeLeft = 60.0;
-let driftAmp = 0.0;
-let goldSizeBase = 0.5;
-let radarRange = 20.0;
-let levelGoldCollected = 0;
-
-const pos = new THREE.Vector3(0, 0, 0);
-let yaw = 0.0, pitch = 0.0;
-let speed = 0.0, yawRate = 0.0, vertVel = 0.0;
-
-const keys = {};
-const currentCam = new THREE.Vector3(-10, 4.5, 0);
-
-/* ============ DOM ============ */
-const $ = id => document.getElementById(id);
-const canvas = $("gameCanvas");
-const radarCanvas = $("radarCanvas");
-const rctx = radarCanvas.getContext("2d");
-
-/* ============ Three.js 初始化 ============ */
-let renderer, scene, camera;
-let playerGroup, playerBody, playerHead, glowSprite, wingL, wingR;
-let starsPoints;
-let goldMeshes = [];      // {mesh, glow, alive, base, phase, dfreq, dphase, world}
-let meteors = [];         // {mesh, pos, rot, rotSpeed, radius}
-let burstParticles = [];  // {mesh, vel, life, maxLife}
-let starPos = null;
-
-const clock = new THREE.Clock();
-
-function initThree(){
-  renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setClearColor(0x05080f, 1);
-
-  scene = new THREE.Scene();
-  scene.fog = new THREE.Fog(0x05080f, 40, 220);
-
-  camera = new THREE.PerspectiveCamera(52, window.innerWidth / window.innerHeight, 0.1, 400);
-
-  const ambient = new THREE.AmbientLight(0x2a3550, 1.0);
-  scene.add(ambient);
-  const dir = new THREE.DirectionalLight(0xffe6b0, 0.9);
-  dir.position.set(5, 10, 4);
-  scene.add(dir);
-  const playerLight = new THREE.PointLight(0xffc832, 1.4, 30);
-  playerGroup = new THREE.Group();
-  playerGroup.add(playerLight);
-  scene.add(playerGroup);
-
-  buildPlayer();
-  buildStars();
-
-  window.addEventListener("resize", onResize);
-}
-
-function onResize(){
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-}
-
-function buildPlayer(){
-  const bodyMat = new THREE.MeshStandardMaterial({ color: 0xe6aa64, roughness: 0.6 });
-  const headMat = new THREE.MeshStandardMaterial({ color: 0xe6aa64, roughness: 0.5 });
-  playerBody = new THREE.Mesh(new THREE.SphereGeometry(0.35, 20, 16), bodyMat);
-  playerBody.position.set(0.2, 0, 0);
-  playerGroup.add(playerBody);
-
-  playerHead = new THREE.Mesh(new THREE.SphereGeometry(0.22, 16, 12), headMat);
-  playerHead.position.set(0.55, 0.05, 0.12);
-  playerGroup.add(playerHead);
-
-  // 发光核心
-  const glowMat = new THREE.SpriteMaterial({
-    color: 0xffc832, transparent: true, opacity: 0.9,
-    blending: THREE.AdditiveBlending, depthWrite: false,
-  });
-  glowSprite = new THREE.Sprite(glowMat);
-  glowSprite.scale.set(1.4, 1.4, 1);
-  glowSprite.position.set(-0.3, 0, -0.1);
-  playerGroup.add(glowSprite);
-
-  // 翅膀
-  const wingMat = new THREE.MeshStandardMaterial({
-    color: 0xfad26e, transparent: true, opacity: 0.55, side: THREE.DoubleSide,
-  });
-  const wingGeo = new THREE.PlaneGeometry(0.9, 0.4);
-  wingL = new THREE.Mesh(wingGeo, wingMat);
-  wingL.position.set(0.2, 0.12, 0.35);
-  wingL.rotation.x = -0.3;
-  playerGroup.add(wingL);
-  wingR = new THREE.Mesh(wingGeo, wingMat);
-  wingR.position.set(0.2, -0.12, 0.35);
-  wingR.rotation.x = 0.3;
-  playerGroup.add(wingR);
-}
-
-function buildStars(){
-  const N = 3000;
-  starPos = new Float32Array(N * 3);
-  for(let i = 0; i < N; i++){
-    starPos[i*3]   = (Math.random() - 0.5) * 320;
-    starPos[i*3+1] = (Math.random() - 0.5) * 320;
-    starPos[i*3+2] = (Math.random() - 0.5) * 320;
-  }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute("position", new THREE.BufferAttribute(starPos, 3));
-  const mat = new THREE.PointsMaterial({
-    color: 0xbcd8ff, size: 0.5, transparent: true, opacity: 0.85,
-    sizeAttenuation: true, depthWrite: false,
-  });
-  starsPoints = new THREE.Points(geo, mat);
-  scene.add(starsPoints);
-}
-
-/* ============ 关卡构建 ============ */
-function clearGold(){
-  for(const g of goldMeshes){
-    scene.remove(g.mesh); scene.remove(g.glow);
-    g.mesh.geometry.dispose(); g.glow.material.dispose();
-  }
-  goldMeshes = [];
-}
-function clearMeteors(){
-  for(const m of meteors){
-    scene.remove(m.mesh);
-    m.mesh.geometry.dispose(); m.mesh.material.dispose();
-  }
-  meteors = [];
-}
-function clearBurst(){
-  for(const p of burstParticles){
-    scene.remove(p.mesh);
-    p.mesh.geometry.dispose(); p.mesh.material.dispose();
-  }
-  burstParticles = [];
-}
-
-function makeGoldMesh(size){
-  const mat = new THREE.MeshStandardMaterial({
-    color: 0xffd940, emissive: 0xffb420, emissiveIntensity: 0.9,
-    roughness: 0.3, metalness: 0.2,
-  });
-  const mesh = new THREE.Mesh(new THREE.SphereGeometry(size, 14, 10), mat);
-  const glow = new THREE.Sprite(new THREE.SpriteMaterial({
-    color: 0xffaa20, transparent: true, opacity: 0.35,
-    blending: THREE.AdditiveBlending, depthWrite: false,
-  }));
-  glow.scale.set(size * 3.2, size * 3.2, 1);
-  scene.add(mesh); scene.add(glow);
-  return { mesh, glow, alive:false, base:new THREE.Vector3(),
-           world:new THREE.Vector3(), phase:0, dfreq:[0,0,0], dphase:[0,0,0] };
-}
-
-function makeMeteorMesh(seed){
-  const rng = mulberry32(seed);
-  const geo = new THREE.IcosahedronGeometry(1, 1);
-  const posAttr = geo.attributes.position;
-  const v = new THREE.Vector3();
-  for(let i = 0; i < posAttr.count; i++){
-    v.fromBufferAttribute(posAttr, i);
-    const n = 1.0 + (rng() - 0.5) * 0.5;
-    v.multiplyScalar(n);
-    posAttr.setXYZ(i, v.x, v.y, v.z);
-  }
-  geo.computeVertexNormals();
-  const shade = 0.55 + rng() * 0.45;
-  const mat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color(0.26*shade, 0.20*shade, 0.16*shade),
-    flatShading: true, roughness: 0.95,
-  });
-  return new THREE.Mesh(geo, mat);
-}
-
-function mulberry32(a){
-  return function(){
-    a |= 0; a = a + 0x6D2B79F5 | 0;
-    let t = Math.imul(a ^ a >>> 15, 1 | a);
-    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
-    return ((t ^ t >>> 14) >>> 0) / 4294967296;
-  };
-}
-
-function startLevel(L, triggerIntro = true){
-  level = L;
-  const cfg = levelConfig(L);
-  nTargets = cfg.n;
-  levelRadius = cfg.radius;
-  timeLimit = cfg.timeLimit;
-  timeLeft = cfg.timeLimit;
-  driftAmp = cfg.drift;
-  goldSizeBase = cfg.size;
-  radarRange = cfg.radius * 1.2;
-
-  state = "playing";
-  stateTimer = 0.0;
-  speed = 0; yaw = 0; pitch = 0; yawRate = 0; vertVel = 0;
-  pos.set(0, 0, 0);
-  levelGoldCollected = 0;
-  failReason = "";
-  if(triggerIntro) introTimer = INTRO_DURATION;
-
-  clearGold(); clearMeteors(); clearBurst();
-
-  // 生成金币
-  for(let i = 0; i < nTargets; i++){
-    const g = makeGoldMesh(goldSizeBase);
-    const r = cfg.radius * Math.pow(Math.random(), 1/3);
-    const rr = Math.random() < 0.35 ? r * 0.45 : r;
-    const ct = Math.random() * 2 - 1;
-    const st = Math.sqrt(Math.max(0, 1 - ct*ct));
-    const ph = Math.random() * Math.PI * 2;
-    g.base.set(rr*st*Math.cos(ph), rr*ct*0.6, rr*st*Math.sin(ph));
-    g.world.copy(g.base);
-    g.alive = true;
-    g.phase = Math.random() * Math.PI * 2;
-    for(let k = 0; k < 3; k++){
-      g.dfreq[k] = 0.25 + Math.random()*0.6;
-      g.dphase[k] = Math.random() * Math.PI * 2;
+    /* ---------- 局数中文数字（第一局 / 第七局…） ---------- */
+    const CN_NUM = ['一','二','三','四','五','六','七','八','九','十',
+                     '十一','十二','十三','十四','十五','十六','十七','十八','十九','二十'];
+    function roundText(n) {
+      return CN_NUM[n - 1] || (n + ''); // 超过 20 局直接显示阿拉伯数字
     }
-    g.mesh.position.copy(g.base);
-    g.glow.position.copy(g.base);
-    goldMeshes.push(g);
-  }
 
-  // 生成陨石：第 1 关 0 颗，每关 +1，上限 28
-  const nMeteor = Math.min(MAX_METEOR, L - 1);
-  for(let i = 0; i < nMeteor; i++){
-    const baseR = 0.9 + Math.random() * (1.0 + L * 0.03);
-    const mesh = makeMeteorMesh(Math.floor(Math.random() * 2**31));
-    let p = new THREE.Vector3();
-    for(let attempt = 0; attempt < 200; attempt++){
-      const r = levelRadius * Math.pow(Math.random(), 1/3) * 1.1;
-      const ct = Math.random()*2 - 1;
-      const st = Math.sqrt(Math.max(0, 1 - ct*ct));
-      const ph = Math.random()*Math.PI*2;
-      const cand = new THREE.Vector3(r*st*Math.cos(ph), r*ct*0.7, r*st*Math.sin(ph));
-      if(cand.length() > 5.0 + baseR){ p = cand; break; }
-      if(attempt === 199) p = cand;
-    }
-    mesh.position.copy(p);
-    mesh.scale.setScalar(baseR);
-    scene.add(mesh);
-    meteors.push({
-      mesh, pos: p.clone(),
-      rot: new THREE.Vector3(Math.random()*360, Math.random()*360, Math.random()*360),
-      rotSpeed: new THREE.Vector3((Math.random()-0.5)*40, (Math.random()-0.5)*40, (Math.random()-0.5)*40),
-      radius: baseR,
-    });
-  }
-}
+    /* ---------- DOM 元素缓存 ---------- */
+    const el = {
+      nameLeft:   document.getElementById('nameLeft'),
+      nameRight:  document.getElementById('nameRight'),
+      totalScore: document.getElementById('totalScore'),
+      roundLabel: document.getElementById('roundLabel'),
+      scoreLeft:  document.getElementById('scoreLeft'),
+      scoreRight: document.getElementById('scoreRight'),
+      historyGrid:document.getElementById('historyGrid'),
+      okBtn:      document.getElementById('okBtn'),
+      swapBtn:    document.getElementById('swapBtn')
+    };
 
-/* ============ 粒子爆发 ============ */
-function spawnBurst(center, n = 90){
-  for(let i = 0; i < n; i++){
-    const mat = new THREE.MeshBasicMaterial({
-      color: Math.random() < 0.4 ? 0xffd940 : 0xffffff,
-      transparent: true, opacity: 1,
-    });
-    const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.08, 6, 5), mat);
-    mesh.position.copy(center);
-    const dir = new THREE.Vector3(
-      Math.random()*2-1, Math.random()*2-1, Math.random()*2-1).normalize();
-    const spd = 1.5 + Math.random()*12.5;
-    const life = 0.8 + Math.random()*1.7;
-    scene.add(mesh);
-    burstParticles.push({ mesh, vel: dir.multiplyScalar(spd), life, maxLife: life });
-  }
-  if(burstParticles.length > 900){
-    const excess = burstParticles.length - 900;
-    for(let i = 0; i < excess; i++){
-      scene.remove(burstParticles[i].mesh);
-      burstParticles[i].mesh.geometry.dispose();
-      burstParticles[i].mesh.material.dispose();
-    }
-    burstParticles.splice(0, excess);
-  }
-}
+    /* ---------- 渲染：把 state 同步到页面 ---------- */
+    function render() {
+      const [p1, p2] = state.players;
 
-/* ============ 输入 ============ */
-window.addEventListener("keydown", e => {
-  keys[e.code] = true;
-  if(e.code === "Enter" && game.mode === "input"){
-    const name = $("nameInput").value.trim();
-    if(name) enterGame(name);
-  }
-  if(e.code === "Escape" && game.mode === "playing"){
-    backToMenu();
-  }
-  if(e.code === "KeyR" && game.mode === "playing"){
-    startLevel(level, true);
-  }
-  if(["Space","ShiftLeft","ShiftRight"].includes(e.code)) e.preventDefault();
-});
-window.addEventListener("keyup", e => { keys[e.code] = false; });
+      // 名字输入框（避免输入时光标被重置：仅在未聚焦时回填）
+      if (document.activeElement !== el.nameLeft)  el.nameLeft.value  = p1.name;
+      if (document.activeElement !== el.nameRight) el.nameRight.value = p2.name;
 
-/* ============ 触屏控制 ============ */
-const isTouch = ("ontouchstart" in window) || navigator.maxTouchPoints > 0;
-if(isTouch) document.body.classList.add("touch");
+      // 当前比分
+      el.scoreLeft.textContent  = p1.score;
+      el.scoreRight.textContent = p2.score;
 
-const touchInput = { accel: 0, turn: 0, up: 0 };
-const joy = { active:false, id:null, cx:0, cy:0, dx:0, dy:0, R:50 };
-const lookTouch = { id:null, lastX:0, lastY:0 };
-const TOUCH_LOOK_SENS = 0.22;
+      // 总比分（胜场数）：两位补零，格式 03:01
+      el.totalScore.textContent =
+        String(p1.total).padStart(2, '0') + ':' + String(p2.total).padStart(2, '0');
 
-const joyZone = $("joyZone");
-const stick = $("stick");
-const btnUp = $("btnUp");
-const btnDown = $("btnDown");
+      // 当前局数
+      el.roundLabel.textContent = '第' + roundText(state.round) + '局';
 
-function joyUpdate(){
-  const rect = joyZone.getBoundingClientRect();
-  joy.R = rect.width * 0.38;
-  joy.cx = rect.left + rect.width/2;
-  joy.cy = rect.top + rect.height/2;
-}
-joyUpdate();
-window.addEventListener("resize", joyUpdate);
-
-function setStick(){
-  stick.style.transform = "translate(calc(-50% + " + (joy.dx*joy.R) + "px), calc(-50% + " + (joy.dy*joy.R) + "px))";
-}
-
-joyZone.addEventListener("touchstart", e => {
-  e.preventDefault();
-  const t = e.changedTouches[0];
-  joy.active = true; joy.id = t.identifier;
-  joy.dx = 0; joy.dy = 0; setStick();
-}, { passive:false });
-
-joyZone.addEventListener("touchmove", e => {
-  if(!joy.active) return;
-  e.preventDefault();
-  for(const t of e.changedTouches){
-    if(t.identifier !== joy.id) continue;
-    let dx = (t.clientX - joy.cx) / joy.R;
-    let dy = (t.clientY - joy.cy) / joy.R;
-    const len = Math.hypot(dx, dy);
-    if(len > 1){ dx /= len; dy /= len; }
-    joy.dx = dx; joy.dy = dy;
-    setStick();
-  }
-}, { passive:false });
-
-function joyEnd(e){
-  for(const t of e.changedTouches){
-    if(t.identifier === joy.id){
-      joy.active = false; joy.id = null; joy.dx = 0; joy.dy = 0; setStick();
-    }
-  }
-}
-joyZone.addEventListener("touchend", joyEnd);
-joyZone.addEventListener("touchcancel", joyEnd);
-
-function bindHold(btn, setVal){
-  btn.addEventListener("touchstart", e => { e.preventDefault(); touchInput.up = setVal; }, { passive:false });
-  const end = e => { e.preventDefault(); if(touchInput.up === setVal) touchInput.up = 0; };
-  btn.addEventListener("touchend", end);
-  btn.addEventListener("touchcancel", end);
-}
-bindHold(btnUp, 1);
-bindHold(btnDown, -1);
-
-// 视角拖动：画布/空白区域触摸
-canvas.addEventListener("touchstart", e => {
-  if(game.mode !== "playing" || introTimer > 0) return;
-  if(lookTouch.id !== null) return;
-  const t = e.changedTouches[0];
-  lookTouch.id = t.identifier;
-  lookTouch.lastX = t.clientX; lookTouch.lastY = t.clientY;
-}, { passive:true });
-
-canvas.addEventListener("touchmove", e => {
-  if(lookTouch.id === null) return;
-  e.preventDefault();
-  for(const t of e.changedTouches){
-    if(t.identifier !== lookTouch.id) continue;
-    const dx = t.clientX - lookTouch.lastX;
-    const dy = t.clientY - lookTouch.lastY;
-    yaw -= dx * TOUCH_LOOK_SENS;
-    pitch -= dy * TOUCH_LOOK_SENS;
-    pitch = Math.max(-65, Math.min(65, pitch));
-    lookTouch.lastX = t.clientX; lookTouch.lastY = t.clientY;
-  }
-}, { passive:false });
-
-function lookEnd(e){
-  for(const t of e.changedTouches){
-    if(t.identifier === lookTouch.id){ lookTouch.id = null; }
-  }
-}
-canvas.addEventListener("touchend", lookEnd);
-canvas.addEventListener("touchcancel", lookEnd);
-
-let lastMouse = null;
-window.addEventListener("mousemove", e => {
-  if(game.mode !== "playing" || introTimer > 0) return;
-  if(lastMouse){
-    const dx = e.clientX - lastMouse.x;
-    const dy = e.clientY - lastMouse.y;
-    yaw -= dx * MOUSE_SENS * 0.1;
-    pitch -= dy * MOUSE_SENS * 0.1;
-    pitch = Math.max(-65, Math.min(65, pitch));
-  }
-  lastMouse = { x: e.clientX, y: e.clientY };
-});
-window.addEventListener("mouseleave", () => { lastMouse = null; });
-
-$("startBtn").addEventListener("click", () => {
-  const name = $("nameInput").value.trim();
-  if(name) enterGame(name);
-});
-
-function enterGame(name){
-  game.playerName = name;
-  const save = loadSave();
-  if(save && save.name === name){
-    game.totalGold = save.gold || 0;
-    game.totalTime = save.time || 0;
-    game.savedLevel = Math.max(1, Math.min(save.level || 1, MAX_LEVEL));
-  } else {
-    game.totalGold = 0; game.totalTime = 0; game.savedLevel = 1;
-  }
-  game.mode = "playing";
-  $("overlay").style.display = "none";
-  startLevel(game.savedLevel, true);
-}
-
-function backToMenu(){
-  persistSave();
-  game.mode = "input";
-  $("overlay").style.display = "flex";
-  $("banner").style.display = "none";
-}
-
-function persistSave(){
-  if(game.playerName){
-    writeSave({ name: game.playerName, level, gold: game.totalGold, time: game.totalTime });
-  }
-}
-
-/* ============ 更新逻辑 ============ */
-function fwdVector(){
-  const cy = Math.cos(yaw * Math.PI/180), sy = Math.sin(yaw * Math.PI/180);
-  const cp = Math.cos(pitch * Math.PI/180), sp = Math.sin(pitch * Math.PI/180);
-  return new THREE.Vector3(cy*cp, sp, sy*cp);
-}
-
-function update(dt, t){
-  if(game.mode !== "playing") return;
-
-  if(introTimer > 0) introTimer = Math.max(0, introTimer - dt);
-
-  // 摇杆方向同步到触屏输入（死区 0.25）
-  if(joy.active){
-    touchInput.accel = joy.dy < -0.25 ? 1 : joy.dy > 0.25 ? -1 : 0;
-    touchInput.turn  = joy.dx < -0.25 ? 1 : joy.dx > 0.25 ? -1 : 0;
-  } else {
-    touchInput.accel = 0; touchInput.turn = 0;
-  }
-
-  let accelIn = (keys["KeyW"]||keys["ArrowUp"]) ? 1 : (keys["KeyS"]||keys["ArrowDown"]) ? -1 : 0;
-  let turnIn  = (keys["KeyA"]||keys["ArrowLeft"]) ? 1 : (keys["KeyD"]||keys["ArrowRight"]) ? -1 : 0;
-  let upIn    = (keys["Space"]||keys["KeyQ"]) ? 1 : (keys["ShiftLeft"]||keys["ShiftRight"]||keys["KeyE"]) ? -1 : 0;
-  if(accelIn === 0) accelIn = touchInput.accel;
-  if(turnIn === 0)  turnIn  = touchInput.turn;
-  if(upIn === 0)    upIn    = touchInput.up;
-
-  // 转向
-  const targetYawRate = turnIn * TURN_RATE;
-  yawRate += (targetYawRate - yawRate) * (1 - Math.exp(-TURN_RESPONSE * dt));
-  yaw += yawRate * dt;
-
-  // 速度
-  const targetSpeed = accelIn > 0 ? MAX_SPEED : accelIn < 0 ? -REVERSE_SPEED : 0;
-  speed += (targetSpeed - speed) * (1 - Math.exp(-SPEED_RESPONSE * dt));
-
-  // 垂直
-  const targetVert = upIn * VERT_SPEED;
-  vertVel += (targetVert - vertVel) * (1 - Math.exp(-VERT_RESPONSE * dt));
-
-  const fwd = fwdVector();
-  pos.addScaledVector(fwd, speed * dt);
-  pos.y += vertVel * dt;
-  pos.y = Math.max(-40, Math.min(40, pos.y));
-
-  // 陨石自转
-  for(const m of meteors){
-    m.rot.x += m.rotSpeed.x * dt;
-    m.rot.y += m.rotSpeed.y * dt;
-    m.rot.z += m.rotSpeed.z * dt;
-    m.mesh.rotation.set(m.rot.x*Math.PI/180, m.rot.y*Math.PI/180, m.rot.z*Math.PI/180);
-  }
-
-  // 计时
-  if(state === "playing" && introTimer <= 0){
-    timeLeft -= dt;
-    game.totalTime += dt;
-    if(timeLeft <= 0){
-      timeLeft = 0;
-      state = "failed"; stateTimer = 2.0; failReason = "TIME UP";
-    }
-  }
-
-  // 陨石碰撞
-  if(state === "playing" && introTimer <= 0){
-    for(const m of meteors){
-      if(m.pos.distanceTo(pos) < m.radius * 0.85 + 1.0){
-        state = "failed"; stateTimer = 2.0; failReason = "CRASHED INTO METEOR";
-        break;
+      // 历史记录：左右两列依次排列
+      el.historyGrid.innerHTML = '';
+      if (state.history.length === 0) {
+        el.historyGrid.innerHTML = '<div class="history-empty">暂无记录</div>';
+        return;
       }
+      state.history.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'history-item';
+        div.textContent = `第${roundText(item.round)}局: ${item.s1}:${item.s2}`;
+        el.historyGrid.appendChild(div);
+      });
     }
-  }
 
-  // 相机跟随
-  const camGoal = pos.clone().addScaledVector(fwd, -CAM_DIST);
-  camGoal.y += CAM_HEIGHT;
-  const lerp = 1 - Math.exp(-CAM_RESPONSE * dt);
-  currentCam.lerp(camGoal, lerp);
-  camera.position.copy(currentCam);
-  camera.lookAt(pos.clone().addScaledVector(fwd, 4.0));
+    /* ---------- 加分 / 减分 ---------- */
+    function applyScore(side, raw) {
+      const idx = side === 'left' ? 0 : 1;
+      const p = state.players[idx];
 
-  // 玩家姿态
-  playerGroup.position.copy(pos);
-  playerGroup.rotation.y = yaw * Math.PI/180;
-  const roll = 12 * Math.sin(t*4) + speed*0.5;
-  playerGroup.rotation.z = roll * Math.PI/180;
-  // 翅膀扇动
-  const flap = Math.sin(t*15) * 0.5;
-  wingL.rotation.x = -0.3 - flap;
-  wingR.rotation.x = 0.3 + flap;
-  // 发光呼吸
-  const breath = 0.5 + 0.5*Math.sin(t*2.5);
-  glowSprite.material.opacity = 0.35 + 0.55*breath;
-  glowSprite.scale.setScalar(1.2 + 0.5*breath);
-
-  // 金币漂移 + 环绕
-  for(const g of goldMeshes){
-    if(!g.alive) continue;
-    if(driftAmp > 0){
-      g.world.set(
-        g.base.x + Math.sin(t*g.dfreq[0]+g.dphase[0]) * driftAmp*2.2,
-        g.base.y + Math.sin(t*g.dfreq[1]+g.dphase[1]) * driftAmp*2.2,
-        g.base.z + Math.sin(t*g.dfreq[2]+g.dphase[2]) * driftAmp*1.32
-      );
-    } else {
-      g.world.copy(g.base);
-    }
-    g.mesh.position.copy(g.world);
-    g.glow.position.copy(g.world);
-    const pulse = 1 + 0.18*Math.sin(t*3 + g.phase);
-    g.mesh.scale.setScalar(pulse);
-    g.mesh.rotation.y += dt*1.5;
-  }
-
-  // 金币收集
-  if(state === "playing" && introTimer <= 0){
-    let remaining = 0;
-    for(const g of goldMeshes){
-      if(!g.alive) continue;
-      remaining++;
-      const dVec = g.world.clone().sub(pos);
-      const dist = dVec.length();
-      if(dist > 1.2 && dist < 3.5){
-        g.world.addScaledVector(dVec, -dt*2.5);
-        g.base.copy(g.world);
-      }
-      if(dist < COLLIDE_DIST){
-        spawnBurst(g.world, 90);
-        g.alive = false;
-        g.mesh.visible = false; g.glow.visible = false;
-        remaining--;
-        levelGoldCollected++;
-        game.totalGold++;
-      }
-    }
-    if(remaining <= 0 && state === "playing"){
-      state = "cleared"; stateTimer = 2.0;
-    }
-  }
-
-  // 状态推进
-  if(state === "cleared"){
-    stateTimer -= dt;
-    if(stateTimer <= 0){
-      if(level >= MAX_LEVEL){
-        state = "victory"; stateTimer = 0;
+      // +X：弹窗输入自定义加分
+      if (raw === 'x') {
+        const input = prompt('输入要加的分值：', '1');
+        const val = parseInt(input, 10);
+        if (isNaN(val)) return;          // 取消或非法输入则不处理
+        p.score += val;
+      // -X：弹窗输入自定义减分
+      } else if (raw === '-x') {
+        const input = prompt('输入要减的分值：', '1');
+        const val = parseInt(input, 10);
+        if (isNaN(val)) return;
+        p.score -= val;
       } else {
-        const newLevel = level + 1;
-        game.savedLevel = newLevel;
-        persistSave();
-        startLevel(newLevel, true);
+        p.score += Number(raw);
       }
+
+      // 分数不允许为负；如需允许负分，删掉下面两行即可
+      if (p.score < 0) p.score = 0;
+
+      render();
     }
-  } else if(state === "failed"){
-    stateTimer -= dt;
-    if(stateTimer <= 0) startLevel(level, true);
-  } else if(state === "victory"){
-    stateTimer += dt;
-    if(keys["KeyR"]){
-      game.savedLevel = 1;
-      persistSave();
-      startLevel(1, true);
-    }
-  }
 
-  // 粒子更新
-  for(const p of burstParticles){
-    p.life -= dt;
-    p.vel.y -= 5.0*dt;
-    p.vel.multiplyScalar(Math.max(0, 1 - 2.5*dt));
-    p.mesh.position.addScaledVector(p.vel, dt);
-    p.mesh.material.opacity = Math.max(0, p.life / p.maxLife);
-  }
-  for(let i = burstParticles.length - 1; i >= 0; i--){
-    if(burstParticles[i].life <= 0){
-      scene.remove(burstParticles[i].mesh);
-      burstParticles[i].mesh.geometry.dispose();
-      burstParticles[i].mesh.material.dispose();
-      burstParticles.splice(i, 1);
-    }
-  }
+    /* ---------- 按钮事件委托：所有加减分按钮 ---------- */
+    document.querySelectorAll('.score-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        applyScore(btn.dataset.side, btn.dataset.score);
+      });
+    });
 
-  // 星空跟随玩家，保持远景
-  starsPoints.position.copy(pos);
+    /* ---------- 名字输入：实时同步到 state ---------- */
+    el.nameLeft.addEventListener('input',  () => state.players[0].name = el.nameLeft.value);
+    el.nameRight.addEventListener('input', () => state.players[1].name = el.nameRight.value);
 
-  updateHUD();
-  drawRadar();
-}
+    /* ---------- 中间按钮：互换双方名字 ---------- */
+    el.swapBtn.addEventListener('click', () => {
+      [state.players[0].name, state.players[1].name] =
+        [state.players[1].name, state.players[0].name];
+      render();
+    });
 
-/* ============ HUD ============ */
-function fmtTime(sec){
-  const m = Math.floor(sec/60), s = Math.floor(sec%60);
-  return m + ":" + String(s).padStart(2, "0");
-}
-function updateHUD(){
-  $("uiLevel").textContent = "LEVEL " + String(level).padStart(2,"0") + " / " + MAX_LEVEL;
-  const done = nTargets - goldMeshes.filter(g => g.alive).length;
-  $("uiCollect").textContent = "COLLECTED " + done + " / " + nTargets;
-  $("uiBar").style.width = (nTargets > 0 ? done/nTargets*100 : 0) + "%";
-  let tcol = "#8ce6a0";
-  if(state === "playing" && timeLeft <= 15) tcol = "#ff6b59";
-  $("uiTime").style.color = tcol;
-  $("uiTime").textContent = "TIME " + fmtTime(timeLeft);
-  $("uiPlayer").textContent = "PLAYER: " + (game.playerName || "-");
-  $("uiGold").textContent = "TOTAL GOLD: " + game.totalGold;
+    /* ---------- 「下一局」键：结束本局 ----------
+       1. 当前比分写入历史记录
+       2. 比较本局比分：分数多的一方胜场 +1；平局双方都不加
+       3. 当前比分清零，局数 +1，开始下一局          */
+    el.okBtn.addEventListener('click', () => {
+      const [p1, p2] = state.players;
+      state.history.push({ round: state.round, s1: p1.score, s2: p2.score });
+      // 胜场判定：本局得分高者 total +1；若平局则不加分
+      if (p1.score > p2.score) {
+        p1.total += 1;
+      } else if (p2.score > p1.score) {
+        p2.total += 1;
+      }
+      p1.score = 0;
+      p2.score = 0;
+      state.round += 1;
+      render();
+    });
 
-  // 横幅
-  const banner = $("banner");
-  if(introTimer > 0){
-    const p = 1 - introTimer / INTRO_DURATION;
-    let a = 1;
-    if(p < 0.22) a = p/0.22; else if(p > 0.72) a = Math.max(0,(1-p)/0.28);
-    banner.style.display = "block";
-    $("bannerBig").textContent = "GAME START";
-    $("bannerBig").style.opacity = a;
-    $("bannerSub").innerHTML =
-      "LEVEL " + String(level).padStart(2,"0") + "<br>" +
-      nTargets + " GOLD PARTICLES TO COLLECT" +
-      (meteors.length > 0 ? "<br>AVOID " + meteors.length + " METEORS" : "");
-    $("bannerSub").style.opacity = a;
-  } else if(state === "cleared"){
-    banner.style.display = "block";
-    $("bannerBig").textContent = "LEVEL CLEARED!";
-    $("bannerBig").style.color = "#ffe680";
-    $("bannerSub").textContent = level >= MAX_LEVEL ? "ALL 50 LEVELS COMPLETE" : "NEXT: LEVEL " + String(level+1).padStart(2,"0");
-  } else if(state === "failed"){
-    banner.style.display = "block";
-    $("bannerBig").textContent = failReason;
-    $("bannerBig").style.color = "#ff735f";
-    $("bannerSub").textContent = "RESTARTING LEVEL...";
-  } else if(state === "victory"){
-    banner.style.display = "block";
-    $("bannerBig").textContent = "★ ALL LEVELS COMPLETE ★";
-    $("bannerBig").style.color = "#ffe680";
-    $("bannerSub").textContent = "Press R to start over";
-  } else {
-    banner.style.display = "none";
-  }
-}
-
-/* ============ 雷达 ============ */
-function drawRadar(){
-  const W = radarCanvas.width, H = radarCanvas.height;
-  rctx.clearRect(0, 0, W, H);
-  const cx = W/2, cy = H/2, R = W/2 - 14;
-
-  rctx.fillStyle = "rgba(5,9,15,0.85)";
-  rctx.beginPath(); rctx.arc(cx, cy, R+6, 0, Math.PI*2); rctx.fill();
-  rctx.strokeStyle = "rgba(60,90,120,0.35)";
-  for(const rr of [0.35, 0.68, 1.0]){
-    rctx.beginPath(); rctx.arc(cx, cy, R*rr, 0, Math.PI*2); rctx.stroke();
-  }
-  rctx.beginPath(); rctx.moveTo(cx-R, cy); rctx.lineTo(cx+R, cy); rctx.stroke();
-  rctx.beginPath(); rctx.moveTo(cx, cy-R); rctx.lineTo(cx, cy+R); rctx.stroke();
-
-  // 动态量程
-  let dmax = 0;
-  for(const g of goldMeshes){ if(g.alive){ dmax = Math.max(dmax, g.world.distanceTo(pos)); } }
-  for(const m of meteors){ dmax = Math.max(dmax, m.pos.distanceTo(pos)); }
-  const targetRange = Math.max(dmax*1.15, levelRadius*0.6, 8.0);
-  radarRange += (targetRange - radarRange) * (1 - Math.exp(-4*0.016));
-  const scaleR = R / Math.max(radarRange, 1e-3);
-  const yawRad = yaw * Math.PI/180;
-
-  // 陨石
-  for(const m of meteors){
-    const dx = m.pos.x - pos.x, dz = m.pos.z - pos.z;
-    const ang = Math.atan2(dz, dx) - yawRad;
-    const dist = Math.hypot(dx, dz);
-    let rx = Math.sin(ang)*dist*scaleR;
-    let ry = Math.cos(ang)*dist*scaleR;
-    let sx = cx+rx, sy = cy-ry;
-    const ox = sx-cx, oy = sy-cy, od = Math.hypot(ox,oy);
-    if(od > R-6){ const k=(R-6)/od; sx=cx+ox*k; sy=cy+oy*k; }
-    const sz = Math.min(9, 2.5 + m.radius*1.2);
-    rctx.fillStyle = "rgba(216,64,38,0.9)";
-    rctx.beginPath();
-    for(let k=0;k<6;k++){
-      const a = 2*Math.PI*k/6 + m.radius;
-      const px = sx + sz*Math.cos(a), py = sy + sz*Math.sin(a);
-      k===0 ? rctx.moveTo(px,py) : rctx.lineTo(px,py);
-    }
-    rctx.closePath(); rctx.fill();
-  }
-
-  // 金币 + 高度差标签
-  for(const g of goldMeshes){
-    if(!g.alive) continue;
-    const dx = g.world.x - pos.x, dz = g.world.z - pos.z;
-    const dy = g.world.y - pos.y;
-    const ang = Math.atan2(dz, dx) - yawRad;
-    const dist = Math.hypot(dx, dz);
-    let rx = Math.sin(ang)*dist*scaleR;
-    let ry = Math.cos(ang)*dist*scaleR;
-    let sx = cx+rx, sy = cy-ry;
-    const ox = sx-cx, oy = sy-cy, od = Math.hypot(ox,oy);
-    let edge = false;
-    if(od > R-9){ const k=(R-9)/od; sx=cx+ox*k; sy=cy+oy*k; edge=true; }
-    let col;
-    if(dy > 3.5) col = "rgba(255,245,158,0.96)";
-    else if(dy < -3.5) col = "rgba(255,140,56,0.96)";
-    else col = "rgba(255,214,66,0.96)";
-
-    rctx.fillStyle = col.replace("0.96","0.22");
-    rctx.beginPath(); rctx.arc(sx, sy, edge?6.5:7, 0, Math.PI*2); rctx.fill();
-    rctx.fillStyle = col;
-    rctx.beginPath(); rctx.arc(sx, sy, edge?3.4:4, 0, Math.PI*2); rctx.fill();
-
-    const label = (dy>=0?"+":"") + dy.toFixed(1);
-    rctx.font = "13px Consolas, monospace";
-    const tw = rctx.measureText(label).width;
-    let lx = sx + 8, ly = sy - 7;
-    if(lx + tw + 6 > W - 6) lx = sx - tw - 10;
-    if(lx < 6) lx = 6;
-    rctx.fillStyle = "rgba(2,4,8,0.82)";
-    rctx.fillRect(lx-3, ly-1, tw+6, 17);
-    rctx.fillStyle = col;
-    rctx.fillText(label, lx, ly+12);
-  }
-
-  // 中心玩家标记
-  rctx.fillStyle = "rgba(112,191,255,0.95)";
-  rctx.beginPath();
-  rctx.moveTo(cx, cy-11); rctx.lineTo(cx-7, cy+7); rctx.lineTo(cx+7, cy+7);
-  rctx.closePath(); rctx.fill();
-}
-
-/* ============ 主循环 ============ */
-function animate(){
-  requestAnimationFrame(animate);
-  const dt = Math.min(clock.getDelta(), 0.05);
-  const t = clock.elapsedTime;
-  update(dt, t);
-  renderer.render(scene, camera);
-}
-
-/* ============ 启动 ============ */
-initThree();
-animate();
-
-// 若有存档，预填名字
-const saved = loadSave();
-if(saved && saved.name) $("nameInput").value = saved.name;
-</script>
+    /* ---------- 首次渲染 ---------- */
+    render();
+  </script>
 </body>
 </html>
